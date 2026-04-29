@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3/brython.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3/brython_stdlib.js"></script>
+</head>
+
+<body onload="brython()">
+
+<h2>Monitor de Consumo Energético</h2>
+
+<select id="setor">
+    <option value="industrial">Industrial</option>
+    <option value="comercial">Comercial</option>
+    <option value="residencial">Residencial</option>
+</select>
+
+<button id="btn">Buscar</button>
+
+<pre id="output"></pre>
+
+<script type="text/python">
+from browser import document, ajax
+import json
+
+def buscar(ev):
+    setor = document["setor"].value
+
+    req = ajax.ajax()
+    req.open("GET", f"http://127.0.0.1:8000/consumption/{setor}", True)
+
+    def complete(req):
+        data = json.loads(req.text)
+
+        texto = f"""
+Valores: {data['valores']}
+Média: {data['media']}
+Pico: {data['pico']}
+"""
+        document["output"].text = texto
+
+    req.bind("complete", complete)
+    req.send()
+
+document["btn"].bind("click", buscar)
+</script>
+
+</body>
+</html>

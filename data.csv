@@ -1,0 +1,10 @@
+timestamp,setor,consumo
+2024-01-01 00:00,industrial,120
+2024-01-01 01:00,industrial,135
+2024-01-01 02:00,industrial,150
+2024-01-01 00:00,comercial,80
+2024-01-01 01:00,comercial,95
+2024-01-01 02:00,comercial,100
+2024-01-01 00:00,residencial,60
+2024-01-01 01:00,residencial,70
+2024-01-01 02:00,residencial,75

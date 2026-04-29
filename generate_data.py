@@ -1,25 +1,26 @@
+import random
 from faker import Faker
 import pandas as pd
-import random
 
 fake = Faker()
 
+PROFILES = {
+    "industrial":  {"day": (150, 200), "night": (80, 130)},
+    "comercial":   {"day": (100, 180), "night": (50, 90)},
+    "residencial": {"day": (60, 100),  "night": (130, 200)},
+}
+
 dados = []
+setores = list(PROFILES.keys())
 
-setores = ["industrial", "comercial", "residencial"]
-
-for _ in range(200):
+for _ in range(300):
     timestamp = fake.date_time_this_month()
-    setor = random.choice(setores)
-    consumo = random.randint(50, 200)
+    sector     = random.choice(setores)
+    period    = "day" if 6 <= timestamp.hour < 20 else "night"
+    low, high = PROFILES[sector][period]
+    consumption   = random.randint(low, high)
 
-    dados.append({
-        "timestamp": timestamp,
-        "setor": setor,
-        "consumo": consumo
-    })
+    dados.append({"timestamp": timestamp, "sector": sector, "consumption": consumption})    
 
-df = pd.DataFrame(dados)
-df.to_csv("data.csv", index=False)
-
-print("Dados gerados com sucesso!")
+pd.DataFrame(dados).to_csv("data.csv", index=False)
+print(f"{len(dados)} records generated with realistic profile.")

@@ -4,6 +4,8 @@
     <script src="https://cdn.jsdelivr.net/npm/brython@3/brython.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/brython@3/brython_stdlib.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -19,11 +21,14 @@
 
 <button id="btn">Search</button>
 
-<pre id="output"></pre>
+<div id="output"></div>
+<canvas id="myChart" width="700" height="300" style="display:none; margin-top:24px;"></canvas>
 
 <script type="text/python">
-from browser import document, ajax, html
+from browser import document, ajax, html, window
 import json
+
+chart_instance = None
 
 def search(ev):
     sector = document["sector"].value
@@ -31,6 +36,7 @@ def search(ev):
     req.open("GET", f"http://127.0.0.1:8000/consumption/{sector}", True)
 
     def complete(req):
+        global chart_instance
         data = json.loads(req.text)
         output = document["output"]
         output.clear()
@@ -49,13 +55,43 @@ def search(ev):
         card <= stat_row("Minimum", f"{data['minimum']} kWh")
         card <= stat_row("Total readings", data["total_records"])
 
-        grid = html.DIV(Class="values-grid")
-        for val in data["values"]:
-            grid <= html.SPAN(val, Class="value-chip")
-
-        card <= html.P("All readings:", style="margin: 12px 0 4px; color: #555;")
-        card <= grid
         output <= card
+
+        canvas = document["myChart"]
+        canvas.style.display = "block"
+
+        if chart_instance:
+            chart_instance.destroy()
+
+        values = data["values"]
+        labels = [str(i + 1) for i in range(len(values))]
+
+        chart_instance = window.Chart.new(canvas, {
+            "type": "bar",
+            "data": {
+                "labels": labels,
+                "datasets": [{
+                    "label": f"Consumption - {data['sector']} (kWh)",
+                    "data": values,
+                    "backgroundColor": "rgba(0, 200, 117, 0.5)",
+                    "borderColor": "#00C875",
+                    "borderWidth": 1
+                }]
+            },
+            "options": {
+                "responsive": True,
+                "plugins": {
+                    "legend": {"labels": {"color": "#E8F5F5"}},
+                },
+                "scales": {
+                    "x": {"ticks": {"color": "#7FB5B5"}},
+                    "y": {
+                        "ticks": {"color": "#7FB5B5"},
+                        "beginAtZero": True
+                    }
+                }
+            }
+        })
 
     req.bind("complete", complete)
     req.send()

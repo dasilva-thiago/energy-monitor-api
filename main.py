@@ -1,31 +1,16 @@
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
 from enum import Enum
 
 class StrEnum(str, Enum):
-    # Inheriting from str makes FastAPI treat it as a string in the URL
     industrial = "industrial"
-    comercial = "comercial"
-    residencial = "residencial"
-
-app = FastAPI(
-    title="Energy Monitor API",
-    description="API for monitoring energy consumption by sector.",
-    version="0.1.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    commercial = "comercial"
+    residential = "residential"
 
 DATA_FILE = Path("data.csv")
 
@@ -52,14 +37,34 @@ def load_data(file_path: Path) -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["timestamp"])
     return df
 
-@app.on_event("startup")
-def startup_load_data() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     try:
         app.state.df = load_data(DATA_FILE)
     except FileNotFoundError:
+        print(f"WARNING: File {DATA_FILE} not found. Starting with empty data.")
         app.state.df = pd.DataFrame(columns=["timestamp", "sector", "consumption"])
-    except Exception:
+    except Exception as e:
+        print(f"ERROR loading data: {e}")
         raise
+    
+    yield
+    app.state.df = None 
+
+app = FastAPI(
+    title="Energy Monitor API",
+    description="API for monitoring energy consumption by sector.",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/", response_model=StatusResponse)
 def root() -> StatusResponse:
@@ -79,7 +84,7 @@ def root() -> StatusResponse:
 def list_sectors() -> SectorsResponse:
     df = app.state.df
 
-    if df.empty:
+    if df.empty or "sector" not in df.columns:
         return SectorsResponse(sectors=[], count=0)
 
     sectors = df["sector"].dropna().unique().tolist()
@@ -89,42 +94,25 @@ def list_sectors() -> SectorsResponse:
 def get_consumption(sector: StrEnum) -> ConsumptionResponse:
     df = app.state.df
 
-    if df.empty:
-        raise HTTPException(status_code=503, detail="Data not loaded.")
-    
-    data = df[df["sector"] == sector.value]
-    consumption = data["consumption"]
-    # .value extracts the string ("industrial") from the Enum member
-
-    return ConsumptionResponse(
-        sector=sector.value,
-        values=consumption.tolist(),
-        average=round(float(consumption.mean()), 2),
-        peak=float(consumption.max()),
-        minimum=float(consumption.min()),
-        total_records=len(consumption),
-    )
-
     if df.empty or "sector" not in df.columns or "consumption" not in df.columns:
         raise HTTPException(
             status_code=500,
             detail="Data unavailable or malformed on the server.",
         )
 
-    normalized_sector = sector.strip().lower()
+    normalized_sector = sector.value.lower()
     data = df[df["sector"].str.lower() == normalized_sector]
 
     if data.empty:
-        valid_sectors = df["sector"].dropna().unique().tolist()
         raise HTTPException(
             status_code=404,
-            detail=f"Sector '{sector}' not found. Available sectors: {valid_sectors}",
+            detail=f"No consumption data found for sector '{sector.value}' in the dataset.",
         )
 
     consumption = data["consumption"]
 
     return ConsumptionResponse(
-        sector=normalized_sector,
+        sector=sector.value,
         values=consumption.tolist(),
         average=round(float(consumption.mean()), 2),
         peak=float(consumption.max()),
